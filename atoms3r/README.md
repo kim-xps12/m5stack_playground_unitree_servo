@@ -92,7 +92,12 @@ parameters / stop):
 start [amp=0.5] [freq=0.5] [kp=10] [kd=0.3] [duration=10] [ramp=1] [rate=200] [print=10] [id=0] [baud=4000000]
 stop
 status        # one mode=0 exchange, the servo does not move
+clear         # clear the servo's error (MError bits that a clear can reset, e.g. overvoltage)
 ```
+
+`clear` はサーボのエラー消去で，公式ツールの「清除故障」と同じ指令 (mode 6 のトルク欄に -256) を送ります．指令の形は公式ツールの解析 (未公開) によります．ID 0 では `FE EE 60 00 00 FF 00 00 00 00 00 00 00 00 00 00 43 FB E0 1E` です．公式の `protocol.c` は mode を 0〜1 に切り詰めるので，組み立てた後に欄を書き換えて CRC を付け直しています．過電圧 (`MError=4`) は `clear` で消えました (実測 2026-11-02)．運転の終わりには，運転中に読んだ電圧の最小と最大，`MError` が最初に出た時刻とそのときの電圧も表示します．
+
+`clear` sends the servo's error-clear command, the same as "清除故障" in the official tool (mode 6 with -256 in the torque field). The packet comes from an analysis of the official tool (not published); for ID 0 it is `FE EE 60 00 00 FF 00 00 00 00 00 00 00 00 00 00 43 FB E0 1E`. The official `protocol.c` clamps mode to 0–1, so the fields are rewritten after packing and the CRC is recomputed. An overvoltage (`MError=4`) was cleared this way (measured 2026-11-02). At the end of a run the firmware also prints the lowest and highest voltage read during the run, and the time and voltage of the first `MError`.
 
 On the Unitree board, both an S288 and a J288 swung at exactly 4 Mbps with no missed reply in
 14,000 cycles each (10 s + 60 s at 200 Hz). A missed command is not fatal: the servo keeps the

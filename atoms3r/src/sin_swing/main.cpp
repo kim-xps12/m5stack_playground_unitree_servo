@@ -16,6 +16,7 @@
 //         [baud=4000000]
 //   stop
 //   status    mode=0 で 1 回通信して状態を表示 (サーボは動かない)
+//   clear     エラー消去 (MError のうち消去で直るもの. 過電圧など)
 // 前面ボタン: 停止中なら前回の条件で開始, スイング中なら停止.
 
 #include <Arduino.h>
@@ -27,6 +28,7 @@
 
 extern "C" {
 #include "protocol.h"
+#include "crc_ccitt.h"
 }
 
 static const gpio_num_t PIN_TX = GPIO_NUM_2;       // Grove -> 基板 J2 の TX
@@ -90,8 +92,28 @@ static MotorCmd_t make_cmd(int id, unsigned short mode, unsigned short timeout, 
 enum Reply { REPLY_OK, REPLY_NONE, REPLY_BAD };  // 正常 / 無応答 / 受信したが読めない
 
 // cmd を送って反馈 26 バイトを待つ. CRC まで正しい応答を data に読めたら REPLY_OK.
+static Reply exchange_raw(MotorCmd_t &cmd, MotorData_t &data);
 static Reply exchange(MotorCmd_t &cmd, MotorData_t &data) {
   modify_data(&cmd);
+  return exchange_raw(cmd, data);
+}
+
+// エラー消去. 公式ツールの「清除故障」と同じ指令で, mode 6 (特別な指令) のトルク欄に -256 を入れる.
+// 指令の形は公式ツールの解析 (未公開) による. ID 0 では FE EE 60 00 00 FF 00 00 00 00 00 00 00 00 00 00 43 FB E0 1E.
+// 公式の modify_data は mode を 0-1 に切り詰めるので, 組み立てた後に欄を書き換えて CRC を付け直す.
+static Reply clear_error(int id, MotorData_t &data) {
+  MotorCmd_t cmd = {};
+  cmd.id = id;
+  modify_data(&cmd);
+  cmd.motor_send_data.mode.status = 6;
+  cmd.motor_send_data.comd.tor_des = -256;
+  cmd.motor_send_data.CRC32 =
+      crc32_lookup_byte_by_byte((const uint8_t *)&cmd.motor_send_data, sizeof(cmd.motor_send_data) - 4);
+  return exchange_raw(cmd, data);
+}
+
+// 組み立て済みの cmd.motor_send_data をそのまま送る.
+static Reply exchange_raw(MotorCmd_t &cmd, MotorData_t &data) {
   uart_flush_input(SERVO_UART);
   uart_write_bytes(SERVO_UART, (const char *)&cmd.motor_send_data, CMD_LEN);
   uart_wait_tx_done(SERVO_UART, pdMS_TO_TICKS(2));
@@ -156,6 +178,9 @@ static void control_loop(void *) {
     // duration 指定時は立ち下げ分まで含めてその時間で終える
     const float end_time = p.duration > 0.0f ? p.duration : INFINITY;
     int n = 0, none = 0, bad = 0;
+    float vmin = INFINITY, vmax = 0.0f;  // 運転中の電圧 (回生で上がるかを見る)
+    float err_t = -1.0f, err_vol = 0.0f;  // MError が最初に出た時刻と, そのときの電圧
+    uint32_t err_code = 0;
     bool interrupted = false;
 
     ulTaskNotifyTake(pdTRUE, 0);
@@ -179,6 +204,15 @@ static void control_loop(void *) {
         Sample s = {t, pos_des, fb.outputPos, fb.outputTor, fb.MError};
         xQueueSend(samples, &s, 0);
       }
+      if (r == REPLY_OK) {
+        vmin = fminf(vmin, fb.vol);
+        vmax = fmaxf(vmax, fb.vol);
+        if (fb.MError != 0 && err_t < 0.0f) {
+          err_t = t;
+          err_vol = fb.vol;
+          err_code = fb.MError;
+        }
+      }
       none += r == REPLY_NONE;
       bad += r == REPLY_BAD;
       n++;
@@ -197,6 +231,8 @@ static void control_loop(void *) {
       Serial.printf("完了: %d 周期 / %.2f s (平均 %.1f Hz)\n", n, elapsed, n / elapsed);
     }
     Serial.printf("通信失敗: 無応答 %d, 受信エラー %d / %d 周期 (%u bps)\n", none, bad, n, (unsigned)p.baud);
+    Serial.printf("電圧: 最小 %.1f V, 最大 %.1f V\n", vmin, vmax);
+    if (err_t >= 0.0f) Serial.printf("MError=%u が t=%.3f s に出た (電圧 %.1f V)\n", (unsigned)err_code, err_t, err_vol);
     Serial.println("サーボ停止 (mode=0)");
     running = false;
   }
@@ -278,8 +314,13 @@ static void handle_line(char *line) {
   } else if (!strcmp(op, "status")) {
     if (running) Serial.println("スイング中です");
     else print_status();
+  } else if (!strcmp(op, "clear")) {
+    MotorData_t fb = {};
+    if (running) Serial.println("スイング中です");
+    else if (clear_error(run_params.id, fb) != REPLY_OK) Serial.println("エラー消去: 応答がありません");
+    else Serial.printf("エラー消去: 応答の MError=%u\n", (unsigned)fb.MError);
   } else {
-    Serial.println("コマンド: start [amp= freq= kp= kd= duration= ramp= rate= print= id=] / stop / status");
+    Serial.println("コマンド: start [amp= freq= kp= kd= duration= ramp= rate= print= id=] / stop / status / clear");
   }
 }
 
@@ -309,7 +350,7 @@ void setup() {
   xTaskCreatePinnedToCore(control_loop, "swing", 4096, NULL, 10, &control_task, 1);
 
   Serial.printf("sin_swing: %u bps, TX=G2 RX=G1\n", (unsigned)BAUD_RATE);
-  Serial.println("コマンド: start [amp= freq= kp= kd= duration= ramp= rate= print= id=] / stop / status");
+  Serial.println("コマンド: start [amp= freq= kp= kd= duration= ramp= rate= print= id=] / stop / status / clear");
 }
 
 void loop() {
