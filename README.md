@@ -1,9 +1,9 @@
-# Unitree Servo Example for M5Stack
+# Unitree Servo Playground for M5Stack
 
 ## About
-[M5Stack 用の Unitree サーボ基板](https://github.com/kim-xps12/m5stack_board_unitree_brushless_digital_servo) を動かして確かめるための，ファームウェア，スクリプト，実験の記録です．AtomS3R を測定器としても使い，オシロスコープなしで，送信の切り替えのタイミングとサーボとの通信を測ります．基板を作り直す前に DYNAMIXEL 用の TTL 基板で行った実験も含みます．
+[M5Stack 用の Unitree サーボ基板](https://github.com/kim-xps12/m5stack_board_unitree_brushless_digital_servo) を動かして確かめるための，ファームウェア，スクリプト，実験の記録です．AtomS3R を測定器としても使い，オシロスコープなしで，送信の切り替えのタイミングとサーボとの通信を測ります．基板を作り直す前に DYNAMIXEL 用の TTL 基板で行った実験も含みます．すぐに動かせるサンプル (AtomS3 でサーボを ±90° で往復させ，応答を画面に出す) は，別のリポジトリ [m5stack_example_unitree_servo](https://github.com/kim-xps12/m5stack_example_unitree_servo) にあります．このリポジトリの元の名前は m5stack_example_unitree_servo で，サンプルにその名前を譲りました (2026-11-02)．
 
-Firmware, scripts and test records for bringing up the [Unitree servo board for M5Stack](https://github.com/kim-xps12/m5stack_board_unitree_brushless_digital_servo). The AtomS3R doubles as the measuring instrument, so the transmit-enable timing and the servo link are measured without an oscilloscope. The experiments on the DYNAMIXEL TTL board that led to the redesign are included.
+Firmware, scripts and test records for bringing up the [Unitree servo board for M5Stack](https://github.com/kim-xps12/m5stack_board_unitree_brushless_digital_servo). The AtomS3R doubles as the measuring instrument, so the transmit-enable timing and the servo link are measured without an oscilloscope. The experiments on the DYNAMIXEL TTL board that led to the redesign are included. A ready-to-run sample (an AtomS3 swinging a servo by ±90° and showing its feedback on the screen) is in a separate repository, [m5stack_example_unitree_servo](https://github.com/kim-xps12/m5stack_example_unitree_servo). This repository was called m5stack_example_unitree_servo until 2026-11-02 and passed that name on to the sample.
 
 ## Contents
 
@@ -16,7 +16,7 @@ Firmware, scripts and test records for bringing up the [Unitree servo board for 
 ## Setup
 
 ```bash
-git clone --recursive https://github.com/kim-xps12/m5stack_example_unitree_servo.git
+git clone --recursive https://github.com/kim-xps12/m5stack_playground_unitree_servo.git
 git submodule update --init   # --recursive を付けずに取得したとき / if cloned without --recursive
 ```
 
